@@ -48,4 +48,4 @@ def process_image(request):
 
 
 def demo_page(request):
-    return render(request, 'index.html')
+    return render(request, 'main.html')
