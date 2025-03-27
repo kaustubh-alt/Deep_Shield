@@ -1,89 +1,118 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Image Upload</title>
+    <title>Deep Shield - Image Processing</title>
     <style>
-      body {
-        font-family: Arial, sans-serif;
-        margin: 20px;
-      }
       .container {
-        max-width: 400px;
-        margin: auto;
-        text-align: center;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
       }
-      input[type="file"] {
-        margin: 10px 0;
+      .preview {
+        max-width: 300px;
+        margin: 20px 0;
       }
-      .response {
+      #responseContainer {
         margin-top: 20px;
-        word-wrap: break-word;
         padding: 10px;
-        border: 1px solid #ddd;
-        background-color: #f9f9f9;
-      }
-      img {
-        max-width: 100%;
-        height: auto;
-        margin-top: 10px;
+        border: 1px solid #ccc;
       }
     </style>
   </head>
   <body>
     <div class="container">
-      <h2>Upload an Image</h2>
+      <h2>Deep Shield Image Analysis</h2>
       <form id="uploadForm">
-        <input type="file" id="imageInput" accept="image/*" required /><br />
-        <button type="submit">Upload</button>
+        {% csrf_token %}
+        <input type="file" id="imageInput" accept="image/*" required />
+        <button type="submit">Analyze Image</button>
       </form>
-      <div class="response" id="responseContainer"></div>
+      <img id="preview" class="preview" style="display: none" />
+      <div id="responseContainer"></div>
     </div>
 
     <script>
+      // Get CSRF token
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== "") {
+          const cookies = document.cookie.split(";");
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === name + "=") {
+              cookieValue = decodeURIComponent(
+                cookie.substring(name.length + 1)
+              );
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+
+      // Preview image before upload
+      document
+        .getElementById("imageInput")
+        .addEventListener("change", function (e) {
+          const preview = document.getElementById("preview");
+          preview.src = URL.createObjectURL(e.target.files[0]);
+          preview.style.display = "block";
+        });
+
+      // Handle form submission
       document
         .getElementById("uploadForm")
-        .addEventListener("submit", async function (event) {
-          event.preventDefault();
+        .addEventListener("submit", async function (e) {
+          e.preventDefault();
 
           const imageInput = document.getElementById("imageInput");
+          const responseContainer =
+            document.getElementById("responseContainer");
+          const csrftoken = getCookie("csrftoken");
+
           if (!imageInput.files[0]) {
-            alert("Please select an image to upload.");
+            responseContainer.innerHTML =
+              '<p style="color: red;">Please select an image to upload.</p>';
             return;
           }
 
-          const formData = new FormData();
-          formData.append("image", imageInput.files[0]);
-
-          try {
-            const response = await fetch(
-              "http://127.0.0.1:8000/process-image/",
-              {
+          // Convert image to base64
+          const reader = new FileReader();
+          reader.onload = async function () {
+            try {
+              const response = await fetch("/api/process-image", {
                 method: "POST",
-                body: formData,
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  image: reader.result,
+                }),
+              });
+
+              const result = await response.json();
+
+              if (response.ok) {
+                responseContainer.innerHTML = `
+                            <h3 style="color: green;">Analysis Complete</h3>
+                            <p><strong>Prediction:</strong> ${result.prediction}</p>
+                            <p><strong>Confidence:</strong> ${result.confidence}%</p>
+                        `;
+              } else {
+                responseContainer.innerHTML = `
+                            <h3 style="color: red;">Error</h3>
+                            <p>${result.error || "Unknown error occurred"}</p>
+                        `;
               }
-            );
-
-            const result = await response.json();
-            const responseContainer =
-              document.getElementById("responseContainer");
-
-            if (response.ok) {
+            } catch (error) {
               responseContainer.innerHTML = `
-                        <p><strong>Message:</strong> ${result.message}</p>
-                        <p><strong>File Path:</strong> ${result.file_path}</p>
-                        <img src="${result.file_path}" alt="Uploaded Image">
+                        <h3 style="color: red;">Error</h3>
+                        <p>Failed to process image. Please try again.</p>
                     `;
-            } else {
-              responseContainer.innerHTML = `
-                        <p><strong>Error:</strong> ${result.error}</p>
-                    `;
+              console.error("Error:", error);
             }
-          } catch (error) {
-            alert("An error occurred while uploading the image.");
-            console.error(error);
-          }
+          };
+          reader.readAsDataURL(imageInput.files[0]);
         });
     </script>
   </body>
