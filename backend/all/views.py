@@ -49,3 +49,6 @@ def process_image(request):
 
 def demo_page(request):
     return render(request, 'main.html')
+
+def old_page(request):
+    return render(request, 'index.html')

@@ -36,6 +36,18 @@
         margin-top: 20px;
         color: green;
       }
+      .images {
+        margin-top: 20px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .images img {
+        max-width: 100%;
+        height: auto;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+      }
     </style>
   </head>
   <body>
@@ -66,6 +78,9 @@
         event.preventDefault(); // Prevent default form submission
 
         const formData = new FormData(form);
+        const fileInput = document.getElementById("image");
+        const uploadedImage = URL.createObjectURL(fileInput.files[0]); // Get the uploaded image preview
+
         responseDiv.textContent = "Uploading...";
 
         try {
@@ -76,7 +91,19 @@
 
           const result = await response.json();
           if (response.ok) {
-            responseDiv.innerHTML = `<h1> Success </h1> <br> <img src="${result.file_path}""> <br> <h1> Prediction : ${result.Prediction}</h1>`;
+            responseDiv.innerHTML = `
+              <div class="images">
+                <div>
+                  <h3>Uploaded Image:</h3>
+                  <img src="${uploadedImage}" alt="Uploaded Image" />
+                </div>
+                <div>
+                  <h3>Response Image:</h3>
+                  <img src="${result.file_path}" alt="Response Image" />
+                </div>
+              </div>
+              <h1>Prediction: ${result.Prediction}</h1>
+            `;
           } else {
             responseDiv.textContent = `Error: ${result.error}`;
           }

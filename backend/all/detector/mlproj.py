@@ -1,7 +1,6 @@
 import torch
 import torchvision.transforms as transforms
 from PIL import Image
-import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 import os
@@ -16,19 +15,18 @@ HEATMAP_THRESHOLD = 0.1  # Threshold for suspicious regions
 SUSPICIOUS_AREA_THRESHOLD = 50  # Percentage threshold for classification as Fake
 
 # Load a Pretrained Model
-model = models.inception_v3(pretrained=True)
+model = models.efficientnet_b7(pretrained=True)  # Switch to EfficientNet for better feature extraction
 model.eval()
 
 def preprocess_image(image_path):
     transform = transforms.Compose([
         transforms.Resize(IMAGE_SIZE),
         transforms.ToTensor(),
-        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # Updated normalization for EfficientNet
     ])
     
     # Open and resize image
     image = Image.open(image_path).convert("RGB")
-    image = image.resize(IMAGE_SIZE)
     input_tensor = transform(image).unsqueeze(0)
     return image, input_tensor
 
@@ -50,7 +48,7 @@ def detect_fakeness(image_path, output_path):
         confidence = predictions[0, class_idx].item()
     
     # Use Grad-CAM to highlight suspicious regions
-    target_layers = [model.Mixed_7c]
+    target_layers = [model.features[-1]]  # Update target layers for EfficientNet
     cam = GradCAM(model=model, target_layers=target_layers)
 
     # Compute Grad-CAM heatmap
@@ -84,23 +82,9 @@ def detect_fakeness(image_path, output_path):
 
     status = "real" if confidence < 0.5 else "fake"
     con = confidence if confidence < 0.5 else 1 - confidence
-    print(f"Prediction: {status} (confidense: {con:.2f}%)")
-    #print(f"Image is predicted as '{class_label}' with a suspicious area of {suspicious_area_percentage:.2f}% and confidence of {confidence:.2f}.")
-    # Display results
-    # plt.figure(figsize=(15, 5))
+    print(f"Prediction: {status} (confidence: {con:.2f}%)")
     
-    # # Original Image    
-    # # Original + Heatmap
-    # plt.subplot(1, 3, 3)
-    # plt.title("Fake Region Highlighted")
-    # plt.imshow(visualization)
-    # plt.axis("off")
-    
-    # plt.show()
-    
-    # Return results
-    
-    return status , con
+    return status, con
 
 def main():
     try:
@@ -111,8 +95,8 @@ def main():
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Image not found: {image_path}")
 
-        stat , coon = detect_fakeness(image_path, output_path)
-        
+        status, conf = detect_fakeness(image_path, output_path)
+        print(f"Final Prediction: {status}, Confidence: {conf:.2f}")
         
     except Exception as e:
         print(f"Error: {str(e)}")
