@@ -82,7 +82,7 @@ def detect_fakeness(image_path, output_path):
 
     status = "real" if confidence < 0.5 else "fake"
     con = confidence if confidence < 0.5 else 1 - confidence
-    print(f"Prediction: {status} (confidence: {con:.2f}%)")
+    print(f"Prediction: {status} (confidence: {con*100:.2f}%)")
     
     return status, con
 
