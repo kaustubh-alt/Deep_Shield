@@ -2,21 +2,19 @@ from django.shortcuts import render
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.core.files.storage import default_storage
-import os
-from PIL import Image
-import uuid
-from .detector.deepint import DeepfakeDetector 
-from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.conf import settings
-import base64
-import io
+from PIL import Image
+import uuid
+import os
+from django.views.decorators.csrf import csrf_exempt
+from .detector.mlproj import detect_fakeness  # Import your detection function
 
-obj = DeepfakeDetector()
-
+@csrf_exempt
 @api_view(['POST'])
 def process_image(request):
     try:
+        apikey = request.headers.get('apikey')
         # Check if 'image' is in the request
         if 'image' not in request.FILES:
             return Response({'error': 'No image file provided'}, status=400)
@@ -31,15 +29,20 @@ def process_image(request):
 
         # Save the file to the media directory
         file_name = f"{uuid.uuid4()}{os.path.splitext(image_file.name)[1]}"
-        file_path = os.path.join(settings.MEDIA_ROOT, file_name)
+        file_path = default_storage.save(file_name, ContentFile(image_file.read()))
 
-        # Write file to the file system
-        with open(file_path, 'wb') as f:
-            for chunk in image_file.chunks():
-                f.write(chunk)
+        # Optional: Resize the image
+        full_file_path = os.path.join(settings.MEDIA_ROOT, file_path)
+        with Image.open(full_file_path) as img:
+            img = img.resize((800, 800))  # Resize image to 800x800
+            img.save(full_file_path)
+
+        status , con = detect_fakeness(full_file_path,full_file_path)
+
+        
 
         # Return response with the file path
-        return Response({'message': 'Image uploaded successfully', 'file_path': f"{settings.MEDIA_URL}{file_name}"})
+        return Response({'message': 'Image uploaded successfully','Prediction':status ,'confidence':con*100,'file_path': f"{settings.MEDIA_URL}{file_name}"})
     except Exception as e:
         return Response({'error': str(e)}, status=500)
 

@@ -1,0 +1,121 @@
+import torch
+import torchvision.transforms as transforms
+from PIL import Image
+import matplotlib.pyplot as plt
+import numpy as np
+import cv2
+import os
+from pytorch_grad_cam import GradCAM
+from pytorch_grad_cam.utils.image import show_cam_on_image
+from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+from torchvision import models
+
+# Constants
+IMAGE_SIZE = (299, 299)
+HEATMAP_THRESHOLD = 0.1  # Threshold for suspicious regions
+SUSPICIOUS_AREA_THRESHOLD = 50  # Percentage threshold for classification as Fake
+
+# Load a Pretrained Model
+model = models.inception_v3(pretrained=True)
+model.eval()
+
+def preprocess_image(image_path):
+    transform = transforms.Compose([
+        transforms.Resize(IMAGE_SIZE),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+    ])
+    
+    # Open and resize image
+    image = Image.open(image_path).convert("RGB")
+    image = image.resize(IMAGE_SIZE)
+    input_tensor = transform(image).unsqueeze(0)
+    return image, input_tensor
+
+def detect_fakeness(image_path, output_path):
+    # Create output directory if it doesn't exist
+    output_dir = os.path.dirname(output_path)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        print(f"Created output directory: {output_dir}")
+    
+    # Preprocess input image
+    original_image, input_tensor = preprocess_image(image_path)
+    
+    # Get the model prediction
+    with torch.no_grad():
+        outputs = model(input_tensor)
+        predictions = torch.nn.functional.softmax(outputs, dim=1)
+        class_idx = torch.argmax(predictions).item()
+        confidence = predictions[0, class_idx].item()
+    
+    # Use Grad-CAM to highlight suspicious regions
+    target_layers = [model.Mixed_7c]
+    cam = GradCAM(model=model, target_layers=target_layers)
+
+    # Compute Grad-CAM heatmap
+    targets = [ClassifierOutputTarget(class_idx)]
+    grayscale_cam = cam(input_tensor=input_tensor, targets=targets)[0]
+    
+    # Resize grayscale_cam to match image dimensions
+    grayscale_cam_resized = cv2.resize(grayscale_cam, (original_image.size[0], original_image.size[1]))
+    
+    # Calculate suspicious area coverage
+    suspicious_pixels = np.sum(grayscale_cam_resized >= HEATMAP_THRESHOLD)
+    total_pixels = grayscale_cam_resized.size
+    suspicious_area_percentage = (suspicious_pixels / total_pixels) * 100
+
+    # Classify as Fake or Real based on suspicious area coverage
+    if suspicious_area_percentage > SUSPICIOUS_AREA_THRESHOLD:
+        class_label = "Fake"
+    else:
+        class_label = "Real"
+    
+    # Generate visualization
+    visualization = show_cam_on_image(np.array(original_image) / 255.0, grayscale_cam_resized, use_rgb=True)
+
+    try:
+        # Save the highlighted image
+        highlighted_image = Image.fromarray((visualization * 255).astype(np.uint8))
+        highlighted_image.save(output_path)
+        print(f"Saved highlighted image to: {output_path}")
+    except Exception as e:
+        print(f"Error saving image: {str(e)}")
+
+    status = "real" if confidence < 0.5 else "fake"
+    con = confidence if confidence < 0.5 else 1 - confidence
+    print(f"Prediction: {status} (confidense: {con:.2f}%)")
+    #print(f"Image is predicted as '{class_label}' with a suspicious area of {suspicious_area_percentage:.2f}% and confidence of {confidence:.2f}.")
+    # Display results
+    # plt.figure(figsize=(15, 5))
+    
+    # # Original Image    
+    # # Original + Heatmap
+    # plt.subplot(1, 3, 3)
+    # plt.title("Fake Region Highlighted")
+    # plt.imshow(visualization)
+    # plt.axis("off")
+    
+    # plt.show()
+    
+    # Return results
+    
+    return status , con
+
+def main():
+    try:
+        # Example Usage
+        image_path = r'C:\Programs\eatright\ML\data\deepfake\Test\Real\real_5414.jpeg'
+        output_path = r'C:\Programs\eatright\ML\results\highlighted_image.jpg'
+
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Image not found: {image_path}")
+
+        stat , coon = detect_fakeness(image_path, output_path)
+        
+        
+    except Exception as e:
+        print(f"Error: {str(e)}")
+
+if __name__ == "__main__":
+    main()
