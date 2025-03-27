@@ -31,6 +31,9 @@ ALLOWED_HOSTS = ["react.com"]
 # Application definition
 
 INSTALLED_APPS = [
+    'all',
+    'rest_framework',
+    'corsheaders',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
