@@ -5,19 +5,23 @@ from django.core.files.storage import default_storage
 import os
 from PIL import Image
 import uuid
+from .detector.deepint import DeepfakeDetector 
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+
+obj = DeepfakeDetector()
 
 # Create your views here.
 
 def detect_image(request):
     return render(request, 'detect_image.html')
 
-@api_view(['POST'])
 def process_image(request):
     try:
         # Check if image file is in request
         if 'image' not in request.FILES:
             return Response({
-                'error': 'No image file provided'
+                'error': 'No image file provided.'
             }, status=400)
 
         image_file = request.FILES['image']
@@ -30,13 +34,16 @@ def process_image(request):
             }, status=400)
 
         # Generate unique filename
-        file_name = f"{uuid.uuid4()}{os.path.splitext(image_file.name)[1]}"
-        file_path = os.path.join('uploads', file_name)
+        file_extension = os.path.splitext(image_file.name)[1]  # Get file extension
+        file_name = f"{uuid.uuid4()}{file_extension}"
+        file_path = os.path.join('media', file_name)
 
-        # Save the file
-        with default_storage.open(file_path, 'wb+') as destination:
-            for chunk in image_file.chunks():
-                destination.write(chunk)
+        # Save file to the media directory
+        saved_path = default_storage.save(file_path, ContentFile(image_file.read()))
+
+        # Generate public URL if needed (for example, in development)
+        file_path = default_storage.url(saved_path)
+
 
         # Process image (add your image processing logic here)
         try:
@@ -44,11 +51,11 @@ def process_image(request):
             # Add your image processing code here
             # For example: dimensions = img.size
 
+            result = obj.predict(img)
+
             response_data = {
-                'success': True,
-                'message': 'Image processed successfully',
-                'file_name': file_name,
-                'dimensions': f"{img.size[0]}x{img.size[1]}",
+                'prediction': result.prediction,
+                'confidence': result.confidence,
                 # Add more data as needed
             }
 
@@ -67,3 +74,7 @@ def process_image(request):
         return Response({
             'error': f'Server error: {str(e)}'
         }, status=500)
+    
+
+def demo_page(request):
+    return render(request, 'index.html')

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Image Upload</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      .container {
+        max-width: 400px;
+        margin: auto;
+        text-align: center;
+      }
+      input[type="file"] {
+        margin: 10px 0;
+      }
+      .response {
+        margin-top: 20px;
+        word-wrap: break-word;
+        padding: 10px;
+        border: 1px solid #ddd;
+        background-color: #f9f9f9;
+      }
+      img {
+        max-width: 100%;
+        height: auto;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Upload an Image</h2>
+      <form id="uploadForm">
+        <input type="file" id="imageInput" accept="image/*" required /><br />
+        <button type="submit">Upload</button>
+      </form>
+      <div class="response" id="responseContainer"></div>
+    </div>
+
+    <script>
+      document
+        .getElementById("uploadForm")
+        .addEventListener("submit", async function (event) {
+          event.preventDefault();
+
+          const imageInput = document.getElementById("imageInput");
+          if (!imageInput.files[0]) {
+            alert("Please select an image to upload.");
+            return;
+          }
+
+          const formData = new FormData();
+          formData.append("image", imageInput.files[0]);
+
+          try {
+            const response = await fetch(
+              "http://127.0.0.1:8000/process-image/",
+              {
+                method: "POST",
+                body: formData,
+              }
+            );
+
+            const result = await response.json();
+            const responseContainer =
+              document.getElementById("responseContainer");
+
+            if (response.ok) {
+              responseContainer.innerHTML = `
+                        <p><strong>Message:</strong> ${result.message}</p>
+                        <p><strong>File Path:</strong> ${result.file_path}</p>
+                        <img src="${result.file_path}" alt="Uploaded Image">
+                    `;
+            } else {
+              responseContainer.innerHTML = `
+                        <p><strong>Error:</strong> ${result.error}</p>
+                    `;
+            }
+          } catch (error) {
+            alert("An error occurred while uploading the image.");
+            console.error(error);
+          }
+        });
+    </script>
+  </body>
+</html>
