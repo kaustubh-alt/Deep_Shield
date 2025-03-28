@@ -39,8 +39,13 @@ Deep Shield is an AI-powered solution designed to provide comprehensive security
 ```
 Deep_Shield/
 ├── backend/           # Django backend for deepfake detection API
-│   ├── templates/     # HTML files for web-based frontend
-│   ├── static/        # Static files (CSS, JS, images)
+│   ├── all/
+       ├── templates/
+       ├── detector/
+       ├── media/
+       ├── views.py
+       ├── urls.py       # HTML files for web-based frontend
+│   ├── backend/        # Static files (CSS, JS, images)
 │   ├── manage.py      # Django management script
 │   ├── requirements.txt   # Backend dependencies
 ├── mobile-app/        # React Native app
@@ -51,6 +56,9 @@ Deep_Shield/
 ```
 
 ## Installation
+
+**Note** : This react Native and Frontend app in Django use a API which is created with backend folder using Rest Framework , 
+You have to perform port forwarding in vscode and forward 8000 and make url public that public url you have to used in react native and in scripts.js in backend/all/static/scripts.js
 
 ### Backend Setup
 
