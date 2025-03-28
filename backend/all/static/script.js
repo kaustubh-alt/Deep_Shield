@@ -1,225 +1,271 @@
 // DOM Elements
+const imageUploadInput = document.getElementById('image-upload');
+const selectImageBtn = document.getElementById('selectImageBtn');
 const dropZone = document.getElementById('dropZone');
-const fileInput = document.getElementById('fileInput');
-const result = document.getElementById('result');
-const confidenceFill = document.getElementById('confidenceFill');
-const confidenceText = document.getElementById('confidenceText');
-const status = document.getElementById('status');
-const resultImage = document.getElementById('resultImage');
-const loadingOverlay = document.querySelector('.loading-overlay');
-const originalImage = document.getElementById('originalImage');
-const elaImage = document.getElementById('elaImage');
-const metadataContent = document.getElementById('metadataContent');
-const comparisonOriginal = document.getElementById('comparisonOriginal');
-const comparisonProcessed = document.getElementById('comparisonProcessed');
+const previewImage = document.getElementById('preview-image');
+const originalImage = document.getElementById('original-image');
+const resultSection = document.getElementById('result-section');
+const resultText = document.getElementById('result-text');
+const confidenceBar = document.getElementById('confidence-bar');
+const confidencePercent = document.getElementById('confidence-percent');
+const newAnalysisButton = document.getElementById('new-analysis-button');
+const loadingOverlay = document.getElementById('loading-overlay');
 
-// Drag and Drop Event Handlers
-dropZone.addEventListener('dragover', (e) => {
+// Global variables
+let currentImageData = null;
+let uploadedImageUrl = null;
+
+// API URLs
+const API_URL = "https://x9j8w8gm-8000.inc1.devtunnels.ms/api/process-image/";
+const BASE_URL = "https://x9j8w8gm-8000.inc1.devtunnels.ms";
+
+// Event listeners
+imageUploadInput.addEventListener('change', handleImageUpload);
+selectImageBtn.addEventListener('click', () => imageUploadInput.click());
+newAnalysisButton.addEventListener('click', resetAnalysis);
+
+// Drag and Drop Events
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, preventDefaults, false);
+});
+
+['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, highlight, false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, unhighlight, false);
+});
+
+dropZone.addEventListener('drop', handleDrop, false);
+
+// Functions
+function preventDefaults(e) {
     e.preventDefault();
-    dropZone.style.borderColor = '#0a58ca';
-});
-
-dropZone.addEventListener('dragleave', () => {
-    dropZone.style.borderColor = '#0d6efd';
-});
-
-dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.style.borderColor = '#0d6efd';
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
-        handleFile(file);
-    }
-});
-
-fileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-        handleFile(file);
-    }
-});
-
-// File Handling
-function handleFile(file) {
-    showLoading();
-    
-    // Create object URL for preview
-    const imageUrl = URL.createObjectURL(file);
-    
-    // Display original image
-    originalImage.src = imageUrl;
-    comparisonOriginal.src = imageUrl;
-    
-    // Extract metadata
-    extractMetadata(file);
-    
-    // Perform ELA analysis
-    performELA(file);
-    
-    // Simulate AI analysis (replace with actual API call)
-    simulateAnalysis(file);
+    e.stopPropagation();
 }
 
-// Metadata Extraction
-function extractMetadata(file) {
-    EXIF.getData(file, function() {
-        const metadata = {};
+function highlight() {
+    dropZone.classList.add('dragover');
+}
+
+function unhighlight() {
+    dropZone.classList.remove('dragover');
+}
+
+function handleDrop(e) {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    if (files.length) {
+        imageUploadInput.files = files;
+        handleImageUpload({ target: imageUploadInput });
+    }
+}
+
+function handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (file && file.type.match('image.*')) {
+        // Create a local object URL for the uploaded image
+        uploadedImageUrl = URL.createObjectURL(file);
         
-        // Basic file information
-        metadata['File Name'] = file.name;
-        metadata['File Size'] = formatFileSize(file.size);
-        metadata['File Type'] = file.type;
+        const reader = new FileReader();
         
-        // EXIF data
-        const exifData = EXIF.getAllTags(this);
-        if (exifData) {
-            metadata['Camera Make'] = exifData.Make || 'Not available';
-            metadata['Camera Model'] = exifData.Model || 'Not available';
-            metadata['Date Taken'] = exifData.DateTime || 'Not available';
-            metadata['Exposure Time'] = exifData.ExposureTime ? `1/${exifData.ExposureTime}` : 'Not available';
-            metadata['Focal Length'] = exifData.FocalLength ? `${exifData.FocalLength}mm` : 'Not available';
-            metadata['ISO'] = exifData.ISOSpeedRatings || 'Not available';
+        reader.onload = function(e) {
+            originalImage.src = uploadedImageUrl;
+            previewImage.src = uploadedImageUrl;
+            currentImageData = e.target.result;
+            
+            // Start analysis immediately when file is loaded
+            analyzeImage(file);
+        };
+        
+        reader.readAsDataURL(file);
+    }
+}
+
+async function analyzeImage(file) {
+    if (!currentImageData) {
+        alert('Please upload an image first');
+        return;
+    }
+    
+    // Show loading overlay with fade in
+    loadingOverlay.style.display = 'flex';
+    setTimeout(() => {
+        loadingOverlay.style.opacity = '1';
+    }, 10);
+    
+    try {
+        // Extract base64 data without the prefix
+        let imageData = currentImageData;
+        if (imageData.includes('base64,')) {
+            imageData = imageData.split('base64,')[1];
         }
         
-        // Update metadata display
-        updateMetadataDisplay(metadata);
-    });
-}
-
-// Error Level Analysis (ELA)
-function performELA(file) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const img = new Image();
-        img.onload = function() {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
+        // Create FormData for file upload approach
+        const formData = new FormData();
+        formData.append('image', file);
+        
+        // First try FormData approach
+        try {
+            const formResponse = await fetch(API_URL, {
+                method: 'POST',
+                body: formData
+            });
             
-            // Set canvas size
-            canvas.width = img.width;
-            canvas.height = img.height;
-            
-            // Draw original image
-            ctx.drawImage(img, 0, 0);
-            
-            // Get image data
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-            
-            // Apply ELA
-            for (let i = 0; i < data.length; i += 4) {
-                const r = data[i];
-                const g = data[i + 1];
-                const b = data[i + 2];
-                
-                // Calculate error level
-                const error = Math.abs(r - g) + Math.abs(g - b) + Math.abs(r - b);
-                
-                // Apply error level to pixel
-                data[i] = error;
-                data[i + 1] = error;
-                data[i + 2] = error;
+            if (formResponse.ok) {
+                const result = await formResponse.json();
+                displayResults(result, uploadedImageUrl);
+                return;
             }
-            
-            // Put modified image data back
-            ctx.putImageData(imageData, 0, 0);
-            
-            // Display ELA result
-            elaImage.src = canvas.toDataURL();
-        };
-        img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+        } catch (formError) {
+            console.log('FormData approach failed, trying JSON approach...');
+        }
+        
+        // Fall back to JSON approach if FormData fails
+        const jsonResponse = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ image: imageData })
+        });
+        
+        if (!jsonResponse.ok) {
+            throw new Error('Network response was not ok');
+        }
+        
+        const result = await jsonResponse.json();
+        
+        // Display results
+        displayResults(result, uploadedImageUrl);
+    } catch (error) {
+        console.error('Error analyzing image:', error);
+        alert('Error analyzing image. Please try again.');
+    } finally {
+        // Hide loading overlay with fade out
+        loadingOverlay.style.opacity = '0';
+        setTimeout(() => {
+            loadingOverlay.style.display = 'none';
+        }, 300);
+    }
 }
 
-// Simulate AI Analysis (Replace with actual API call)
-function simulateAnalysis(file) {
-    setTimeout(() => {
-        // Simulate confidence score (0-1)
-        const confidence = Math.random();
-        
-        // Update UI
-        updateAnalysisResult(confidence);
-        
-        // Hide loading overlay
-        hideLoading();
-    }, 2000);
-}
-
-// UI Updates
-function updateAnalysisResult(confidence) {
-    result.classList.remove('d-none');
+function displayResults(result, uploadedImageUrl) {
+    // Prepare to show results section
+    resultSection.classList.remove('d-none');
+    resultSection.style.opacity = '0';
+    dropZone.style.display = 'none';
     
-    // Update confidence score
-    const confidencePercentage = (confidence * 100).toFixed(2);
-    confidenceFill.style.width = `${confidencePercentage}%`;
-    confidenceText.textContent = `${confidencePercentage}%`;
+    // Assuming the API returns a result with prediction data
+    // Adjust these fields based on the actual API response format
+    let isReal = false;
+    let confidence = 0;
     
-    // Update status
-    if (confidence > 0.7) {
-        status.textContent = 'HIGH RISK';
-        status.className = 'badge bg-danger';
-    } else if (confidence > 0.4) {
-        status.textContent = 'MODERATE RISK';
-        status.className = 'badge bg-warning';
+    // Check for Prediction field from reference code
+    if (result.Prediction !== undefined) {
+        // If using the format from the reference code
+        isReal = result.Prediction.toLowerCase() === 'real';
+        confidence = result.confidence || 0.8; // Default confidence if not provided
+    }
+    // Check the structure of the API response and extract relevant information
+    else if (result.prediction !== undefined) {
+        // If the API returns a 'prediction' field
+        isReal = result.prediction === 'real';
+        confidence = result.confidence || 0;
+    } else if (result.is_real !== undefined) {
+        // If the API returns an 'is_real' field
+        isReal = result.is_real;
+        confidence = result.confidence || 0;
+    } else if (result.isReal !== undefined) {
+        // If the API returns an 'isReal' field
+        isReal = result.isReal;
+        confidence = result.confidence || 0;
+    } else if (result.is_authentic !== undefined) {
+        // If the API returns an 'is_authentic' field from the new UI
+        isReal = result.is_authentic;
+        confidence = result.confidence || 0;
     } else {
-        status.textContent = 'LOW RISK';
-        status.className = 'badge bg-success';
+        // Default fallback
+        isReal = false;
+        confidence = 0;
+        console.error('Unknown API response format:', result);
     }
-}
-
-function updateMetadataDisplay(metadata) {
-    metadataContent.innerHTML = '';
-    for (const [key, value] of Object.entries(metadata)) {
-        const item = document.createElement('div');
-        item.className = 'metadata-item';
-        item.innerHTML = `
-            <span class="metadata-key">${key}</span>
-            <span class="metadata-value">${value}</span>
-        `;
-        metadataContent.appendChild(item);
+    
+    // Process confidence value
+    confidence = parseFloat(confidence) || 0;
+    
+    // If confidence is given as a decimal (0-1), convert to percentage
+    if (confidence > 0 && confidence < 1) {
+        confidence = confidence * 100;
     }
+    
+    // Round up to the nearest integer using Math.ceil()
+    confidence = Math.ceil(confidence);
+    
+    // Ensure confidence is within 0-100 range
+    confidence = Math.min(Math.max(confidence, 0), 100);
+    
+    // Display the processed image if it's available
+    const processedImageUrl = result.file_path || result.processed_image || BASE_URL + "/processed_image";
+    
+    // Update the original and processed images
+    originalImage.src = uploadedImageUrl;
+    previewImage.src = processedImageUrl;
+    
+    // Apply the appropriate CSS class to the result text
+    resultText.classList.remove('real', 'fake');
+    
+    // Set result text based on result
+    if (isReal) {
+        resultText.innerHTML = 'This image appears to be <span class="text-success">REAL</span>';
+        resultText.classList.add('real');
+    } else {
+        resultText.innerHTML = 'This image appears to be <span class="text-danger">FAKE</span>';
+        resultText.classList.add('fake');
+    }
+    
+    // Add a slight delay before displaying confidence to allow for animation
+    setTimeout(() => {
+        // Update confidence bar
+        confidenceBar.style.width = `${confidence}%`;
+        confidencePercent.textContent = `${confidence}%`;
+        
+        // Set color of confidence bar based on result
+        if (isReal) {
+            confidenceBar.style.backgroundColor = 'var(--success-color)';
+        } else {
+            confidenceBar.style.backgroundColor = 'var(--danger-color)';
+        }
+        
+        // Fade in the results
+        resultSection.style.opacity = '1';
+    }, 100);
 }
 
-// Loading Overlay
-function showLoading() {
-    loadingOverlay.style.display = 'flex';
+function resetAnalysis() {
+    // Reset form and variables
+    imageUploadInput.value = '';
+    currentImageData = null;
+    uploadedImageUrl = null;
+    
+    // Fade out the result section
+    resultSection.style.opacity = '0';
+    
+    setTimeout(() => {
+        // Reset UI
+        resultSection.classList.add('d-none');
+        confidenceBar.style.width = '0%';
+        
+        // Reset images
+        originalImage.src = '';
+        previewImage.src = '';
+        
+        // Show upload area with fade in
+        dropZone.style.display = 'block';
+        dropZone.style.opacity = '0';
+        setTimeout(() => {
+            dropZone.style.opacity = '1';
+        }, 10);
+    }, 400);
 }
-
-function hideLoading() {
-    loadingOverlay.style.display = 'none';
-}
-
-// Utility Functions
-function formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-// Image Zoom Functionality
-resultImage.addEventListener('mousemove', function(e) {
-    const rect = this.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    const lens = document.querySelector('.zoom-lens');
-    const result = document.querySelector('.zoom-result');
-    
-    lens.style.display = 'block';
-    result.style.display = 'block';
-    
-    lens.style.left = (x - lens.offsetWidth/2) + 'px';
-    lens.style.top = (y - lens.offsetHeight/2) + 'px';
-    
-    result.style.backgroundImage = `url(${this.src})`;
-    result.style.backgroundSize = `${this.width * 2}px ${this.height * 2}px`;
-    result.style.backgroundPosition = `-${x * 2 - result.offsetWidth/2}px -${y * 2 - result.offsetHeight/2}px`;
-});
-
-resultImage.addEventListener('mouseleave', function() {
-    document.querySelector('.zoom-lens').style.display = 'none';
-    document.querySelector('.zoom-result').style.display = 'none';
-});

@@ -114,7 +114,7 @@ def detect_fakeness(image_path, output_path):
         print(f"Error saving image: {str(e)}")
 
     status = "real" if confidence < 0.5 else "fake"
-    con = confidence 
+    con = confidence if status == "fake" else 1 - confidence
     print(f"Prediction: {status} (confidence: {con*100:.2f}%)")
     
     return status, con
