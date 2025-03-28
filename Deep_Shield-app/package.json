@@ -1,0 +1,19 @@
+{
+  "name": "deepshield-web",
+  "version": "1.0.0",
+  "description": "Deep Learning-based Fake Image Detector Web App",
+  "scripts": {
+    "start": "npx http-server . -o"
+  },
+  "keywords": [
+    "deep-learning",
+    "image-detection",
+    "fake-image-detection",
+    "dnn"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
