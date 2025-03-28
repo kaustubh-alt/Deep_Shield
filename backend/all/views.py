@@ -10,6 +10,9 @@ import os
 from django.views.decorators.csrf import csrf_exempt
 from .detector.mlproj import detect_fakeness  # Import your detection function
 
+
+path = None
+
 @csrf_exempt
 @api_view(['POST'])
 def process_image(request):
@@ -36,6 +39,7 @@ def process_image(request):
         with Image.open(full_file_path) as img:
             img = img.resize((800, 800))  # Resize image to 800x800
             img.save(full_file_path)
+            path = full_file_path
 
         status , con = detect_fakeness(full_file_path,full_file_path)
 
@@ -45,6 +49,10 @@ def process_image(request):
         return Response({'message': 'Image uploaded successfully','Prediction':status ,'confidence':con*100,'file_path': f"{settings.MEDIA_URL}{file_name}"})
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+    
+    
+    
+
 
 
 def demo_page(request):

@@ -69,19 +69,52 @@ def detect_fakeness(image_path, output_path):
     else:
         class_label = "Real"
     
-    # Generate visualization
-    visualization = show_cam_on_image(np.array(original_image) / 255.0, grayscale_cam_resized, use_rgb=True)
+    # Create mask for suspicious regions
+    suspicious_mask = grayscale_cam_resized >= HEATMAP_THRESHOLD
+    
+    # Convert original image to numpy array
+    original_array = np.array(original_image)
+    
+    # Set opacity level (0 to 1, where 1 is fully opaque)
+    opacity = 0.3
+    
+    # Create semi-transparent color overlays
+    output_array = original_array.copy()  # Start with the original image
+    
+    # Apply red tint to suspicious regions
+    red_tint = np.zeros_like(original_array)
+    red_tint[..., 0] = 255  # Red channel
+    mask_3d = np.stack([suspicious_mask] * 3, axis=2)
+    output_array = np.where(
+        mask_3d,
+        (1 - opacity) * original_array + opacity * red_tint,
+        output_array
+    )
+    
+    # Apply green tint to non-suspicious regions
+    green_tint = np.zeros_like(original_array)
+    green_tint[..., 1] = 255  # Green channel
+    output_array = np.where(
+        ~mask_3d,
+        (1 - opacity) * original_array + opacity * green_tint,
+        output_array
+    )
 
     try:
         # Save the highlighted image
-        highlighted_image = Image.fromarray((visualization * 255).astype(np.uint8))
+        highlighted_image = Image.fromarray(output_array.astype(np.uint8))
         highlighted_image.save(output_path)
         print(f"Saved highlighted image to: {output_path}")
+        
+        # Print statistics
+        print(f"Suspicious area coverage: {suspicious_area_percentage:.2f}%")
+        print(f"Number of suspicious regions: {np.sum(suspicious_mask)}")
+        
     except Exception as e:
         print(f"Error saving image: {str(e)}")
 
     status = "real" if confidence < 0.5 else "fake"
-    con = confidence if confidence < 0.5 else 1 - confidence
+    con = confidence 
     print(f"Prediction: {status} (confidence: {con*100:.2f}%)")
     
     return status, con
